@@ -1,9 +1,9 @@
 --cpu=Cortex-M4.fp.sp
 "test\startup_stm32f407xx.o"
+"test\tj_mpu6050.o"
 "test\main.o"
 "test\stm32f4xx_it.o"
 "test\stm32f4xx_hal_msp.o"
-"test\tj_mpu6050.o"
 "test\stm32f4xx_hal_dcmi.o"
 "test\stm32f4xx_hal_dcmi_ex.o"
 "test\stm32f4xx_hal_rcc.o"

@@ -19,9 +19,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
 #include "TJ_MPU6050.h"
 /* USER CODE END Includes */
 
@@ -45,8 +45,20 @@ DCMI_HandleTypeDef hdcmi;
 
 I2C_HandleTypeDef hi2c1;
 
-/* USER CODE BEGIN PV */
+TIM_HandleTypeDef htim6;
+TIM_HandleTypeDef htim7;
 
+/* USER CODE BEGIN PV */
+volatile int Buffer[64];
+volatile int Snapshot[64];
+volatile int buff_index; 
+volatile int tim6count;
+volatile int tim7count;
+volatile int count;
+
+
+extern RawData_Def myAccelRaw, myGyroRaw;
+extern ScaledData_Def myAccelScaled, myGyroScaled;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -54,14 +66,15 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DCMI_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_TIM6_Init(void);
+static void MX_TIM7_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-RawData_Def myAccelRaw, myGyroRaw;
-ScaledData_Def myAccelScaled, myGyroScaled;
+
 /* USER CODE END 0 */
 
 /**
@@ -72,6 +85,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 	MPU_ConfigTypeDef myMpuConfig;
+	
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -80,7 +94,11 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+	HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_SET);
+	HAL_Delay(2000);
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -94,20 +112,38 @@ int main(void)
   MX_GPIO_Init();
   MX_DCMI_Init();
   MX_I2C1_Init();
+  MX_TIM6_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
 	
-	// 1. Initialize the MPU6050 module and I2C
-	MPU6050_Init(&hi2c1);
+	HAL_TIM_Base_Start_IT(&htim7);
 
 	// 2. Configure Accel and Gyro parameters
 	myMpuConfig.Accel_Full_Scale = AFS_SEL_4g;
 	myMpuConfig.ClockSource = Internal_8MHz;
 	myMpuConfig.CONFIG_DLPF = DLPF_184A_188G_Hz;
 	myMpuConfig.Gyro_Full_Scale = FS_SEL_500;
-	myMpuConfig.Sleep_Mode_Bit = 0; //1: Sleep Mode, 0: Normal Mode
+	myMpuConfig.Sleep_Mode_Bit = 0; 						//1: Sleep Mode, 0: Normal Mode
+	
+	// 1. Initialize the MPU6050 module and I2C
+	MPU6050_Init(&hi2c1);
 
-MPU6050_Config(&myMpuConfig);
+	MPU6050_Config(&myMpuConfig);
 
+	//initializing the LED Pins
+	
+//	HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+//	HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+//	HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+//	HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_RESET);
+//	HAL_Delay(2000);
+//	HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+//	HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+//	HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
+//	HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_SET);
+//	HAL_Delay(2000);
+	
+	
 
   /* USER CODE END 2 */
 
@@ -115,22 +151,69 @@ MPU6050_Config(&myMpuConfig);
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
 		
+    /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
 		
-		//Raw Data:8
+		
+		
+/*	//Raw Data:
 		MPU6050_Get_Accel_RawData(&myAccelRaw);
 		MPU6050_Get_Gyro_RawData(&myGyroRaw);
 		
 		//Scaled Data
-//		MPU6050_Get_Accel_Scale(&myAccelScaled);
-//		MPU6050_Get_Gyro_Scale(&myGyroScaled);
-//			HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
-			HAL_Delay(10);
+		MPU6050_Get_Accel_Scale(&myAccelScaled);
+		MPU6050_Get_Gyro_Scale(&myGyroScaled);
+	//	HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+	//HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+*/
+ 
+		HAL_Delay(100);
+		__DSB();
+		__ISB();
+		NVIC_DisableIRQ(TIM7_IRQn);
+//		NVIC_DisableIRQ(TIM6_IRQn);
 		
 		
-  }
+		if(fabs(myGyroScaled.x) > fabs(myGyroScaled.y)) {
+			if(myGyroScaled.x > 0) {
+				HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+				HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_RESET);
+			}
+			else {
+				HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_SET);
+				HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_RESET);
+			}
+
+		} else if(fabs(myGyroScaled.y) > fabs(myGyroScaled.x)) {
+			if(myGyroScaled.y > 0) {
+				HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
+				HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_RESET);
+			}
+			else {
+				HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_SET);
+			}
+
+		}
+		else {
+			HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(LED4_GPIO_Port, LED4_Pin, GPIO_PIN_RESET);
+		}
+		NVIC_EnableIRQ(TIM7_IRQn);
+	//	NVIC_EnableIRQ(TIM6_IRQn);
+  } 
   /* USER CODE END 3 */
 }
 
@@ -246,6 +329,82 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 0;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 65536-1;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
+  * @brief TIM7 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM7_Init(void)
+{
+
+  /* USER CODE BEGIN TIM7_Init 0 */
+
+  /* USER CODE END TIM7_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM7_Init 1 */
+
+  /* USER CODE END TIM7_Init 1 */
+  htim7.Instance = TIM7;
+  htim7.Init.Prescaler = 0;
+  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim7.Init.Period = 65536-1;
+  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM7_Init 2 */
+
+  /* USER CODE END TIM7_Init 2 */
 
 }
 
